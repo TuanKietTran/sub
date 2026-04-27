@@ -1,8 +1,7 @@
 import { ValueObject } from "../value-object";
+import type { InstantProps } from "./types";
 
-interface InstantProps {
-   epochMillis: number;
-}
+export type { InstantProps };
 
 export class Instant extends ValueObject<InstantProps> {
    constructor(props: InstantProps) {
@@ -91,7 +90,7 @@ export class Instant extends ValueObject<InstantProps> {
       return new Date(this.props.epochMillis).toISOString();
    }
 
-   toString(): string {
+   override toString(): string {
       return this.toISO();
    }
    toJSON(): string {

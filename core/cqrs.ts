@@ -36,19 +36,23 @@ export function createHandler<TInput, TOutput = void>(
    };
 }
 
-class Mediator {
-   private commandHandlers = new Map<
-      string,
-      ReturnType<typeof createHandler>
-   >();
-   private queryHandlers = new Map<string, ReturnType<typeof createHandler>>();
+export type Handler<I, O> = {
+   type: string;
+   execute: (payload: I) => Promise<Result<O>>;
+};
 
-   registerCommand(handler: ReturnType<typeof createHandler>) {
-      this.commandHandlers.set(handler.type, handler);
+type AnyHandler = Handler<unknown, unknown>;
+
+class Mediator {
+   private commandHandlers = new Map<string, AnyHandler>();
+   private queryHandlers = new Map<string, AnyHandler>();
+
+   registerCommand<I, O>(handler: Handler<I, O>): void {
+      this.commandHandlers.set(handler.type, handler as AnyHandler);
    }
 
-   registerQuery(handler: ReturnType<typeof createHandler>) {
-      this.queryHandlers.set(handler.type, handler);
+   registerQuery<I, O>(handler: Handler<I, O>): void {
+      this.queryHandlers.set(handler.type, handler as AnyHandler);
    }
 
    /** Main method - recommended */
@@ -78,7 +82,6 @@ class Mediator {
    }
 }
 
-
 let _mediator: Mediator | undefined;
 export function mountVendor() {
    if (_mediator) return;
@@ -87,6 +90,6 @@ export function mountVendor() {
 }
 
 export function useMediator() {
-   if (!_mediator) throw new Error('Mediator not mounted');
+   if (!_mediator) throw new Error("Mediator not mounted");
    return _mediator;
 }

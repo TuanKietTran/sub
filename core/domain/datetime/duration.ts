@@ -1,8 +1,7 @@
 import { ValueObject } from "../value-object";
+import type { DurationProps } from "./types";
 
-interface DurationProps {
-   millis: number;
-}
+export type { DurationProps };
 
 export class Duration extends ValueObject<DurationProps> {
    constructor(props: DurationProps) {

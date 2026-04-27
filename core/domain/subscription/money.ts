@@ -1,19 +1,19 @@
 import { ValueObject } from "../value-object";
+import type { CurrencyCode, MoneyProps } from "./types";
 
-// ISO 4217 currency codes we support
-export type CurrencyCode = "USD" | "EUR" | "GBP" | "JPY" | "AUD" | "CAD" | "SGD" | "VND";
+export type { CurrencyCode, MoneyProps };
 
 // minor-unit multipliers (JPY + VND have no subunit)
 const MINOR_UNITS: Record<CurrencyCode, number> = {
-   USD: 100, EUR: 100, GBP: 100,
-   AUD: 100, CAD: 100, SGD: 100,
-   JPY: 1,   VND: 1,
+   USD: 100,
+   EUR: 100,
+   GBP: 100,
+   AUD: 100,
+   CAD: 100,
+   SGD: 100,
+   JPY: 1,
+   VND: 1,
 };
-
-interface MoneyProps {
-   amountMinor: number;  // e.g. 999 = $9.99
-   currency: CurrencyCode;
-}
 
 export class Money extends ValueObject<MoneyProps> {
    constructor(props: MoneyProps) {
@@ -34,8 +34,12 @@ export class Money extends ValueObject<MoneyProps> {
       return Money.of(minor, currency);
    }
 
-   get amountMinor(): number { return this.props.amountMinor; }
-   get currency(): CurrencyCode { return this.props.currency; }
+   get amountMinor(): number {
+      return this.props.amountMinor;
+   }
+   get currency(): CurrencyCode {
+      return this.props.currency;
+   }
 
    get amountMajor(): number {
       return this.props.amountMinor / MINOR_UNITS[this.props.currency];
@@ -43,17 +47,25 @@ export class Money extends ValueObject<MoneyProps> {
 
    add(other: Money): Money {
       this.assertSameCurrency(other);
-      return Money.of(this.props.amountMinor + other.props.amountMinor, this.props.currency);
+      return Money.of(
+         this.props.amountMinor + other.props.amountMinor,
+         this.props.currency,
+      );
    }
 
    multiply(factor: number): Money {
       if (!Number.isFinite(factor) || factor < 0) {
          throw new Error("factor must be non-negative finite number");
       }
-      return Money.of(Math.round(this.props.amountMinor * factor), this.props.currency);
+      return Money.of(
+         Math.round(this.props.amountMinor * factor),
+         this.props.currency,
+      );
    }
 
-   isZero(): boolean { return this.props.amountMinor === 0; }
+   isZero(): boolean {
+      return this.props.amountMinor === 0;
+   }
 
    isGreaterThan(other: Money): boolean {
       this.assertSameCurrency(other);
@@ -62,15 +74,20 @@ export class Money extends ValueObject<MoneyProps> {
 
    private assertSameCurrency(other: Money): void {
       if (this.props.currency !== other.props.currency) {
-         throw new Error(`currency mismatch: ${this.props.currency} vs ${other.props.currency}`);
+         throw new Error(
+            `currency mismatch: ${this.props.currency} vs ${other.props.currency}`,
+         );
       }
    }
 
-   toString(): string {
+   override toString(): string {
       return `${this.amountMajor.toFixed(MINOR_UNITS[this.props.currency] === 1 ? 0 : 2)} ${this.props.currency}`;
    }
 
    toJSON(): { amountMinor: number; currency: CurrencyCode } {
-      return { amountMinor: this.props.amountMinor, currency: this.props.currency };
+      return {
+         amountMinor: this.props.amountMinor,
+         currency: this.props.currency,
+      };
    }
 }

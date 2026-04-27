@@ -9,6 +9,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@parcel/watcher", "better-sqlite3", "esbuild"]
+  },
   "dependencies": {
     "nuxt": "^4.4.2",
     "vue": "^3.5.32",

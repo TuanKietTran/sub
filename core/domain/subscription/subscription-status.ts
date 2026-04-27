@@ -1,23 +1,20 @@
 import { ValueObject } from "../value-object";
+import type { StatusCode, SubscriptionStatusProps } from "./types";
 
-export type StatusCode = "trialing" | "active" | "past_due" | "paused" | "cancelled" | "expired";
+export type { StatusCode, SubscriptionStatusProps };
 
 // terminal = no further state transitions expected
 const TERMINAL: ReadonlySet<StatusCode> = new Set(["cancelled", "expired"]);
 
 // allowed transitions: from → Set<to>
 const TRANSITIONS: Record<StatusCode, ReadonlySet<StatusCode>> = {
-   trialing:  new Set(["active", "cancelled", "expired"]),
-   active:    new Set(["past_due", "paused", "cancelled", "expired"]),
-   past_due:  new Set(["active", "cancelled", "expired"]),
-   paused:    new Set(["active", "cancelled", "expired"]),
+   trialing: new Set(["active", "cancelled", "expired"]),
+   active: new Set(["past_due", "paused", "cancelled", "expired"]),
+   past_due: new Set(["active", "cancelled", "expired"]),
+   paused: new Set(["active", "cancelled", "expired"]),
    cancelled: new Set(),
-   expired:   new Set(),
+   expired: new Set(),
 };
-
-interface SubscriptionStatusProps {
-   code: StatusCode;
-}
 
 export class SubscriptionStatus extends ValueObject<SubscriptionStatusProps> {
    constructor(props: SubscriptionStatusProps) {
@@ -31,22 +28,38 @@ export class SubscriptionStatus extends ValueObject<SubscriptionStatusProps> {
       return new SubscriptionStatus({ code });
    }
 
-   static readonly TRIALING  = new SubscriptionStatus({ code: "trialing" });
-   static readonly ACTIVE    = new SubscriptionStatus({ code: "active" });
-   static readonly PAST_DUE  = new SubscriptionStatus({ code: "past_due" });
-   static readonly PAUSED    = new SubscriptionStatus({ code: "paused" });
+   static readonly TRIALING = new SubscriptionStatus({ code: "trialing" });
+   static readonly ACTIVE = new SubscriptionStatus({ code: "active" });
+   static readonly PAST_DUE = new SubscriptionStatus({ code: "past_due" });
+   static readonly PAUSED = new SubscriptionStatus({ code: "paused" });
    static readonly CANCELLED = new SubscriptionStatus({ code: "cancelled" });
-   static readonly EXPIRED   = new SubscriptionStatus({ code: "expired" });
+   static readonly EXPIRED = new SubscriptionStatus({ code: "expired" });
 
-   get code(): StatusCode { return this.props.code; }
+   get code(): StatusCode {
+      return this.props.code;
+   }
 
-   get isActive(): boolean { return this.props.code === "active"; }
-   get isTrialing(): boolean { return this.props.code === "trialing" }
-   get isPastDue(): boolean { return this.props.code === "past_due"; }
-   get isPaused(): boolean { return this.props.code === "paused"; }
-   get isCancelled(): boolean { return this.props.code === "cancelled"; }
-   get isExpired(): boolean { return this.props.code === "expired"; }
-   get isTerminal(): boolean { return TERMINAL.has(this.props.code); }
+   get isActive(): boolean {
+      return this.props.code === "active";
+   }
+   get isTrialing(): boolean {
+      return this.props.code === "trialing";
+   }
+   get isPastDue(): boolean {
+      return this.props.code === "past_due";
+   }
+   get isPaused(): boolean {
+      return this.props.code === "paused";
+   }
+   get isCancelled(): boolean {
+      return this.props.code === "cancelled";
+   }
+   get isExpired(): boolean {
+      return this.props.code === "expired";
+   }
+   get isTerminal(): boolean {
+      return TERMINAL.has(this.props.code);
+   }
 
    // whether subscription grants access to content
    get hasAccess(): boolean {
@@ -61,6 +74,10 @@ export class SubscriptionStatus extends ValueObject<SubscriptionStatusProps> {
       return SubscriptionStatus.of(next);
    }
 
-   toString(): string { return this.props.code; }
-   toJSON(): string { return this.props.code; }
+   override toString(): string {
+      return this.props.code;
+   }
+   toJSON(): string {
+      return this.props.code;
+   }
 }
