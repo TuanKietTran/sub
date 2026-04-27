@@ -12,6 +12,9 @@ export default defineNuxtConfig({
          "dev-only-secret-change-me-in-production!!",
    },
    devtools: { enabled: true },
+
+   css: ['~/assets/theme/themes.css'],
+
    alias: {
       "@core": corePath,
       "@infra": infraPath,
