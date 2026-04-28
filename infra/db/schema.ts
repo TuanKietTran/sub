@@ -22,6 +22,7 @@ export const plans = sqliteTable("plans", {
    currency: text("currency").notNull(),
    billingCycle: text("billing_cycle").notNull(),
    trialDays: integer("trial_days"),
+   provider: text("provider").notNull().default(""),
    features: text("features").notNull().default("[]"), // JSON array
    isPublic: integer("is_public", { mode: "boolean" }).notNull().default(true),
 });

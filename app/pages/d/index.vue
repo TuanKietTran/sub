@@ -35,11 +35,6 @@ const planMap = computed(() => {
     return m;
 });
 
-function formatPlanAmount(plan: UIPlan | undefined): string {
-    if (!plan) return "—";
-    return formatMoney(plan.price.amountMinor, plan.price.currency);
-}
-
 const MINOR_UNITS: Record<CurrencyCode, number> = {
     USD: 100,
     EUR: 100,
@@ -50,36 +45,52 @@ const MINOR_UNITS: Record<CurrencyCode, number> = {
     JPY: 1,
     VND: 1,
 };
+
 function formatMoney(amountMinor: number, currency: CurrencyCode): string {
     const units = MINOR_UNITS[currency] ?? 100;
     const major = amountMinor / units;
     return `${major.toFixed(units === 1 ? 0 : 2)} ${currency}`;
 }
 
+function formatPlanAmount(plan: UIPlan | undefined): string {
+    if (!plan) return "—";
+    return formatMoney(plan.price.amountMinor, plan.price.currency);
+}
+
 const activeSubs = computed(() =>
     subs.value.filter((s) => s.status === "active" || s.status === "trialing"),
 );
 
-const monthlySpend = computed(() => {
-    let total = 0;
-    let currency: CurrencyCode = "USD";
+// Group spend by currency to handle multi-currency portfolios correctly
+const monthlySpendByCurrency = computed(() => {
+    const totals: Record<string, number> = {};
+    const annualFreq: Record<BillingPeriod, number> = {
+        weekly: 52 / 12,
+        monthly: 1,
+        quarterly: 1 / 3,
+        biannual: 1 / 6,
+        yearly: 1 / 12,
+    };
     for (const s of activeSubs.value) {
         const plan = planMap.value[s.planId];
         if (!plan) continue;
-        currency = plan.price.currency;
-        const units = MINOR_UNITS[currency];
-        const annualFreq: Record<BillingPeriod, number> = {
-            weekly: 52 / 12,
-            monthly: 1,
-            quarterly: 1 / 3,
-            biannual: 1 / 6,
-            yearly: 1 / 12,
-        };
-        total +=
-            (plan.price.amountMinor / units) *
-            (annualFreq[plan.billingCycle] ?? 1);
+        const { currency } = plan.price;
+        const units = MINOR_UNITS[currency] ?? 100;
+        const monthly = (plan.price.amountMinor / units) * (annualFreq[plan.billingCycle] ?? 1);
+        totals[currency] = (totals[currency] ?? 0) + monthly;
     }
-    return total;
+    return totals;
+});
+
+const monthlySpendDisplay = computed(() => {
+    const entries = Object.entries(monthlySpendByCurrency.value);
+    if (entries.length === 0) return "0.00 USD";
+    return entries
+        .map(([cur, amt]) => {
+            const units = MINOR_UNITS[cur as CurrencyCode] ?? 100;
+            return `${amt.toFixed(units === 1 ? 0 : 2)} ${cur}`;
+        })
+        .join(" + ");
 });
 
 const nextBilling = computed(() => {
@@ -96,7 +107,7 @@ const stats = computed(() => [
     },
     {
         label: "Monthly spend",
-        value: `$${monthlySpend.value.toFixed(2)}`,
+        value: monthlySpendDisplay.value,
         delta: "across active plans",
         color: "var(--peach)",
     },
@@ -115,11 +126,16 @@ const stats = computed(() => [
 ]);
 
 const search = ref("");
+const filterStatus = ref<StatusCode | "">("");
+
 const filteredSubs = computed(() => {
     const q = search.value.toLowerCase();
     return subs.value.filter((s) => {
         const plan = planMap.value[s.planId];
-        return !q || (plan?.name ?? s.planId).toLowerCase().includes(q);
+        const matchesSearch = !q || (plan?.name ?? s.planId).toLowerCase().includes(q)
+            || (plan?.provider ?? "").toLowerCase().includes(q);
+        const matchesStatus = !filterStatus.value || s.status === filterStatus.value;
+        return matchesSearch && matchesStatus;
     });
 });
 
@@ -135,6 +151,63 @@ const statusColor: Record<StatusCode, string> = {
 const loading = computed(
     () => plansStatus.value === "pending" || subsStatus.value === "pending",
 );
+
+// ── Add subscription modal ────────────────────────────────────────────────────
+const showAddModal = ref(false);
+const addForm = ref({
+    planId: "",
+    billingPeriod: "" as BillingPeriod | "",
+    trialDays: "" as number | "",
+});
+const addError = ref("");
+const addLoading = ref(false);
+
+function openAddModal() {
+    addForm.value = { planId: "", billingPeriod: "", trialDays: "" };
+    addError.value = "";
+    showAddModal.value = true;
+}
+
+const selectedPlan = computed(() =>
+    plans.value.find((p) => p.id === addForm.value.planId),
+);
+
+async function submitAdd() {
+    if (!addForm.value.planId) {
+        addError.value = "Select a plan.";
+        return;
+    }
+    addLoading.value = true;
+    addError.value = "";
+    try {
+        await $fetch("/api/subscriptions", {
+            method: "POST",
+            body: {
+                userId: userId.value,
+                planId: addForm.value.planId,
+                billingPeriod: addForm.value.billingPeriod || selectedPlan.value?.billingCycle,
+                trialDays: addForm.value.trialDays !== "" ? Number(addForm.value.trialDays) : undefined,
+            },
+        });
+        showAddModal.value = false;
+        await refreshSubs();
+    } catch (e: any) {
+        addError.value = e?.data?.message ?? e?.message ?? "Failed to create subscription.";
+    } finally {
+        addLoading.value = false;
+    }
+}
+
+// ── Cancel subscription ───────────────────────────────────────────────────────
+async function cancelSub(id: string) {
+    if (!confirm("Cancel this subscription?")) return;
+    try {
+        await $fetch(`/api/subscriptions/${id}/cancel`, { method: "POST" });
+        await refreshSubs();
+    } catch (e: any) {
+        alert(e?.data?.message ?? "Failed to cancel.");
+    }
+}
 </script>
 
 <template>
@@ -146,7 +219,7 @@ const loading = computed(
                     Subscriptions for user <code>{{ userId }}</code>
                 </p>
             </div>
-            <button class="btn-add" type="button">
+            <button class="btn-add" type="button" @click="openAddModal">
                 <span aria-hidden="true">+</span>
                 Add subscription
             </button>
@@ -169,6 +242,19 @@ const loading = computed(
                 <div class="section-head">
                     <h2 class="section-title">Subscriptions</h2>
                     <div class="section-actions">
+                        <select
+                            v-model="filterStatus"
+                            class="filter-select"
+                            aria-label="Filter by status"
+                        >
+                            <option value="">All statuses</option>
+                            <option value="active">Active</option>
+                            <option value="trialing">Trialing</option>
+                            <option value="paused">Paused</option>
+                            <option value="past_due">Past due</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="expired">Expired</option>
+                        </select>
                         <input
                             v-model="search"
                             type="search"
@@ -188,6 +274,7 @@ const loading = computed(
                         <thead>
                             <tr>
                                 <th>Plan</th>
+                                <th>Provider</th>
                                 <th>Cycle</th>
                                 <th>Amount</th>
                                 <th>Next billing</th>
@@ -208,6 +295,9 @@ const loading = computed(
                                             sub.planId
                                         }}</span>
                                     </div>
+                                </td>
+                                <td class="muted">
+                                    {{ planMap[sub.planId]?.provider || "—" }}
                                 </td>
                                 <td class="muted">
                                     {{
@@ -235,18 +325,11 @@ const loading = computed(
                                 <td>
                                     <div class="row-actions">
                                         <button
-                                            class="action-btn"
-                                            type="button"
-                                            title="Edit"
-                                            aria-label="Edit subscription"
-                                        >
-                                            ✎
-                                        </button>
-                                        <button
                                             class="action-btn danger"
                                             type="button"
                                             title="Cancel"
                                             aria-label="Cancel subscription"
+                                            @click="cancelSub(sub.id)"
                                         >
                                             ✕
                                         </button>
@@ -259,6 +342,69 @@ const loading = computed(
             </div>
         </template>
     </div>
+
+    <!-- Add Subscription Modal -->
+    <Teleport to="body">
+        <div v-if="showAddModal" class="modal-backdrop" @click.self="showAddModal = false">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                <div class="modal-header">
+                    <h2 id="modal-title" class="modal-title">Add subscription</h2>
+                    <button class="modal-close" type="button" aria-label="Close" @click="showAddModal = false">✕</button>
+                </div>
+
+                <form class="modal-body" @submit.prevent="submitAdd">
+                    <div class="field">
+                        <label class="label" for="add-plan">Plan</label>
+                        <select
+                            id="add-plan"
+                            v-model="addForm.planId"
+                            class="input"
+                            required
+                        >
+                            <option value="" disabled>Select a plan…</option>
+                            <option v-for="p in plans" :key="p.id" :value="p.id">
+                                {{ p.provider ? `${p.provider} — ` : "" }}{{ p.name }}
+                                ({{ formatMoney(p.price.amountMinor, p.price.currency) }} / {{ p.billingCycle }})
+                            </option>
+                        </select>
+                    </div>
+
+                    <div v-if="selectedPlan" class="field">
+                        <label class="label" for="add-cycle">Billing period</label>
+                        <select id="add-cycle" v-model="addForm.billingPeriod" class="input">
+                            <option value="">Default ({{ selectedPlan.billingCycle }})</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="biannual">Biannual</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label class="label" for="add-trial">Trial days <span class="label-hint">(optional)</span></label>
+                        <input
+                            id="add-trial"
+                            v-model.number="addForm.trialDays"
+                            type="number"
+                            class="input"
+                            min="0"
+                            placeholder="e.g. 14"
+                        />
+                    </div>
+
+                    <p v-if="addError" class="form-error">{{ addError }}</p>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" @click="showAddModal = false">Cancel</button>
+                        <button type="submit" class="btn-primary" :disabled="addLoading">
+                            {{ addLoading ? "Adding…" : "Add subscription" }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -358,11 +504,12 @@ const loading = computed(
     margin-bottom: 12px;
 }
 .stat-value {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1;
     margin-bottom: 8px;
+    word-break: break-all;
 }
 .stat-delta {
     font-size: 12px;
@@ -375,12 +522,33 @@ const loading = computed(
     justify-content: space-between;
     margin-bottom: 16px;
     gap: 16px;
+    flex-wrap: wrap;
 }
 .section-title {
     font-size: 16px;
     font-weight: 600;
     color: var(--fg-text);
     margin: 0;
+}
+.section-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.filter-select {
+    background: var(--bg-surface0);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--fg-text);
+    padding: 8px 12px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.filter-select:focus {
+    border-color: var(--accent);
 }
 
 .search {
@@ -509,5 +677,146 @@ const loading = computed(
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 24px;
+}
+
+.modal {
+    background: var(--bg-base);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 0;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--fg-text);
+    margin: 0;
+}
+
+.modal-close {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--fg-subtext0);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+.modal-close:hover {
+    background: var(--bg-surface0);
+    color: var(--fg-text);
+}
+
+.modal-body {
+    padding: 20px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg-subtext1);
+}
+.label-hint {
+    font-weight: 400;
+    color: var(--fg-subtext0);
+}
+
+.input {
+    background: var(--bg-surface0);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--fg-text);
+    padding: 9px 12px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+.input:focus {
+    border-color: var(--accent);
+}
+
+.form-error {
+    margin: 0;
+    font-size: 13px;
+    color: var(--red);
+}
+
+.modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.btn-secondary {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--fg-subtext1);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.btn-secondary:hover {
+    background: var(--bg-surface0);
+    color: var(--fg-text);
+}
+
+.btn-primary {
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: var(--accent);
+    color: var(--bg-crust);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 </style>
