@@ -6,8 +6,7 @@ const route = useRoute();
 
 const nav = [
     { label: "Dashboard", to: "/d", exact: true },
-    { label: "Plans", to: "/d/plans", exact: false },
-    { label: "Providers", to: "/d/providers", exact: false },
+    { label: "Plans", to: "/p", exact: false },
 ];
 
 const { user, logout } = useAuth();

@@ -4,7 +4,10 @@ import type { BillingPeriod, CurrencyCode } from "@core/domain";
 
 useHead({ title: "sub — Plans" });
 
-const { data, status } = await useFetch<PlansResponse>("/api/plans", {
+const route = useRoute();
+const userId = computed(() => (route.query.userId as string) || "demo");
+
+const { data, status, refresh } = await useFetch<PlansResponse>("/api/plans", {
     query: { all: "true" },
 });
 
@@ -20,18 +23,31 @@ function formatMoney(amountMinor: number, currency: CurrencyCode): string {
     return `${(amountMinor / units).toFixed(units === 1 ? 0 : 2)} ${currency}`;
 }
 
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+type Tab = "all" | "mine";
+const activeTab = ref<Tab>("all");
+
+const myPlans = computed(() =>
+    plans.value.filter((p) => p.source === "user" && p.createdBy === userId.value),
+);
+
+const tabPlans = computed(() =>
+    activeTab.value === "mine" ? myPlans.value : plans.value,
+);
+
+// ── Filters ───────────────────────────────────────────────────────────────────
 const search = ref("");
 const filterCycle = ref<BillingPeriod | "">("");
 const filterProvider = ref("");
 
 const providers = computed(() => {
-    const set = new Set(plans.value.map((p) => p.provider).filter(Boolean));
+    const set = new Set(tabPlans.value.map((p) => p.provider).filter(Boolean));
     return [...set].sort();
 });
 
 const filteredPlans = computed(() => {
     const q = search.value.toLowerCase();
-    return plans.value.filter((p) => {
+    return tabPlans.value.filter((p) => {
         const matchesSearch =
             !q ||
             p.name.toLowerCase().includes(q) ||
@@ -44,6 +60,22 @@ const filteredPlans = computed(() => {
 });
 
 const loading = computed(() => status.value === "pending");
+
+// ── Delete user plan ──────────────────────────────────────────────────────────
+const deletingId = ref<string | null>(null);
+
+async function deletePlan(plan: UIPlan) {
+    if (!confirm(`Delete plan "${plan.name}"? This cannot be undone.`)) return;
+    deletingId.value = plan.id;
+    try {
+        await $fetch(`/api/plans/${plan.id}`, { method: "DELETE" });
+        await refresh();
+    } catch (e: any) {
+        alert(e?.data?.message ?? "Failed to delete plan.");
+    } finally {
+        deletingId.value = null;
+    }
+}
 </script>
 
 <template>
@@ -51,8 +83,23 @@ const loading = computed(() => status.value === "pending");
         <div class="page-header">
             <div>
                 <h1 class="page-title">Plans</h1>
-                <p class="page-sub">{{ plans.length }} plans in catalog</p>
+                <p class="page-sub">{{ plans.length }} plans in catalog · {{ myPlans.length }} yours</p>
             </div>
+        </div>
+
+        <div class="tabs">
+            <button
+                class="tab"
+                :class="{ active: activeTab === 'all' }"
+                type="button"
+                @click="activeTab = 'all'"
+            >All plans</button>
+            <button
+                class="tab"
+                :class="{ active: activeTab === 'mine' }"
+                type="button"
+                @click="activeTab = 'mine'"
+            >My plans <span v-if="myPlans.length" class="tab-count">{{ myPlans.length }}</span></button>
         </div>
 
         <div v-if="loading" class="loading">Loading…</div>
@@ -112,6 +159,14 @@ const loading = computed(() => status.value === "pending");
 
                     <div class="plan-badge-row">
                         <span v-if="!plan.isPublic" class="badge-private">Private</span>
+                        <span v-if="plan.source === 'user'" class="badge-user">My plan</span>
+                        <button
+                            v-if="plan.source === 'user' && plan.createdBy === userId"
+                            class="btn-delete-plan"
+                            type="button"
+                            :disabled="deletingId === plan.id"
+                            @click="deletePlan(plan)"
+                        >{{ deletingId === plan.id ? "Deleting…" : "Delete" }}</button>
                     </div>
                 </div>
             </div>
@@ -310,4 +365,60 @@ const loading = computed(() => status.value === "pending");
     color: var(--yellow);
     background: color-mix(in srgb, var(--yellow) 10%, transparent);
 }
+.badge-user {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--teal);
+    color: var(--teal);
+    background: color-mix(in srgb, var(--teal) 10%, transparent);
+}
+
+.tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+}
+.tab {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fg-subtext0);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.tab:hover { color: var(--fg-text); }
+.tab.active { color: var(--fg-text); border-bottom-color: var(--accent); }
+.tab-count {
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--accent);
+    color: var(--bg-crust);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+}
+
+.btn-delete-plan {
+    margin-left: auto;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--red);
+    background: transparent;
+    color: var(--red);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.btn-delete-plan:hover:not(:disabled) { background: var(--red); color: var(--bg-crust); }
+.btn-delete-plan:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

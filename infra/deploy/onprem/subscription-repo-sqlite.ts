@@ -32,6 +32,10 @@ export class SqliteSubscriptionRepo implements SubscriptionRepository {
          .run();
    }
 
+   async delete(id: SubscriptionId): Promise<void> {
+      this.db.delete(subscriptions).where(eq(subscriptions.id, id.value)).run();
+   }
+
    async findByUser(userId: string): Promise<Subscription[]> {
       const rows = this.db
          .select()

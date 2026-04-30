@@ -23,6 +23,8 @@ export const plans = sqliteTable("plans", {
    billingCycle: text("billing_cycle").notNull(),
    trialDays: integer("trial_days"),
    provider: text("provider").notNull().default(""),
+   source: text("source", { enum: ["user", "catalog"] }).notNull().default("catalog"),
+   createdBy: text("created_by"),
    features: text("features").notNull().default("[]"), // JSON array
    isPublic: integer("is_public", { mode: "boolean" }).notNull().default(true),
 });
