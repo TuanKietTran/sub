@@ -6,6 +6,9 @@ export interface UIPlan {
    id: string
    name: string
    description: string
+   provider: string
+   source: "user" | "catalog"
+   createdBy: string | null
    price: MoneyProps          // same shape Money.toJSON() emits
    billingCycle: BillingPeriod
    trialDays: number | null

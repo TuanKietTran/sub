@@ -45,6 +45,17 @@ export class DenoKvPlanRepo implements PlanRepository {
       return results;
    }
 
+   async findByUser(userId: string): Promise<Plan[]> {
+      const kv = await getKv();
+      const results: Plan[] = [];
+      for await (const entry of kv.list<string>({ prefix: ["plan_user", userId] })) {
+         const id = entry.key[2] as string;
+         const planEntry = await kv.get<ReturnType<Plan["toJSON"]>>(["plan", id]);
+         if (planEntry.value !== null) results.push(Plan.fromJSON(planEntry.value));
+      }
+      return results;
+   }
+
    async save(plan: Plan): Promise<void> {
       const kv = await getKv();
       const op = kv.atomic().set(["plan", plan.id.value], plan.toJSON());
@@ -53,15 +64,21 @@ export class DenoKvPlanRepo implements PlanRepository {
       } else {
          op.delete(["plan_public", plan.id.value]);
       }
+      if (plan.isUserPlan && plan.createdBy) {
+         op.set(["plan_user", plan.createdBy, plan.id.value], "");
+      }
       await op.commit();
    }
 
    async delete(id: PlanId): Promise<void> {
       const kv = await getKv();
-      await kv
-         .atomic()
+      const entry = await kv.get<ReturnType<Plan["toJSON"]>>(["plan", id.value]);
+      const op = kv.atomic()
          .delete(["plan", id.value])
-         .delete(["plan_public", id.value])
-         .commit();
+         .delete(["plan_public", id.value]);
+      if (entry.value?.createdBy) {
+         op.delete(["plan_user", entry.value.createdBy, id.value]);
+      }
+      await op.commit();
    }
 }

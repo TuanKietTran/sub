@@ -21,6 +21,7 @@ import { registerGetSubscription } from "@core/handlers/get-subscription";
 import { registerListSubscriptions } from "@core/handlers/list-subscriptions";
 import { registerSchedulePlanChange } from "@core/handlers/schedule-plan-change";
 import { registerCancelPlanChange } from "@core/handlers/cancel-plan-change";
+import { registerTerminateSubscription } from "@core/handlers/terminate-subscription";
 
 import { registerGetPlan } from "@core/handlers/get-plan";
 import { registerListPlans } from "@core/handlers/list-plans";
@@ -45,6 +46,7 @@ export function registerAll(repos: Repos): void {
    registerListSubscriptions(sub);
    registerSchedulePlanChange(sub);
    registerCancelPlanChange(sub);
+   registerTerminateSubscription(sub);
 
    registerGetPlan(plan);
    registerListPlans(plan);

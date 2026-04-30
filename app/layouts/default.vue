@@ -4,7 +4,10 @@ import { useTheme, type ThemeId } from "~/composables/useTheme";
 const { current, themes, apply } = useTheme();
 const route = useRoute();
 
-const nav = [{ label: "Dashboard", to: "/d" }];
+const nav = [
+    { label: "Dashboard", to: "/d", exact: true },
+    { label: "Plans", to: "/p", exact: false },
+];
 
 const { user, logout } = useAuth();
 const handleLogout = async () => {
@@ -28,7 +31,7 @@ const handleLogout = async () => {
                         :key="item.to"
                         :to="item.to"
                         class="nav-link"
-                        :class="{ active: route.path.startsWith(item.to) }"
+                        :class="{ active: item.exact ? route.path === item.to : route.path.startsWith(item.to) }"
                     >
                         {{ item.label }}
                     </NuxtLink>

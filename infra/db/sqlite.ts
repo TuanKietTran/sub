@@ -46,6 +46,7 @@ export function getSqliteDb() {
          id            TEXT PRIMARY KEY,
          name          TEXT NOT NULL,
          description   TEXT NOT NULL DEFAULT '',
+         provider      TEXT NOT NULL DEFAULT '',
          amount_minor  INTEGER NOT NULL,
          currency      TEXT NOT NULL,
          billing_cycle TEXT NOT NULL,
@@ -54,6 +55,9 @@ export function getSqliteDb() {
          is_public     INTEGER NOT NULL DEFAULT 1
       )
    `);
+   try { _db.run(sql`ALTER TABLE plans ADD COLUMN provider TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+   try { _db.run(sql`ALTER TABLE plans ADD COLUMN source TEXT NOT NULL DEFAULT 'catalog'`); } catch { /* exists */ }
+   try { _db.run(sql`ALTER TABLE plans ADD COLUMN created_by TEXT`); } catch { /* exists */ }
 
    _db.run(sql`
       CREATE TABLE IF NOT EXISTS users (

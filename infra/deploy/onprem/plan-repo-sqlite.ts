@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getSqliteDb } from "@infra/db/sqlite";
 import { plans } from "@infra/db/schema";
 import { Plan, PlanId } from "@core/domain/catalog";
@@ -22,6 +22,12 @@ export class SqlitePlanRepo implements PlanRepository {
          .map(r => Plan.fromJSON(rowToJson(r)));
    }
 
+   async findByUser(userId: string): Promise<Plan[]> {
+      return this.db.select().from(plans)
+         .where(and(eq(plans.source, "user"), eq(plans.createdBy, userId)))
+         .all().map(r => Plan.fromJSON(rowToJson(r)));
+   }
+
    async save(plan: Plan): Promise<void> {
       const row = jsonToRow(plan.toJSON());
       this.db.insert(plans).values(row).onConflictDoUpdate({ target: plans.id, set: row }).run();
@@ -40,6 +46,9 @@ function rowToJson(row: Row): Json {
       id: row.id,
       name: row.name,
       description: row.description,
+      provider: row.provider,
+      source: (row.source ?? "catalog") as Json["source"],
+      createdBy: row.createdBy ?? null,
       price: { amountMinor: row.amountMinor, currency: row.currency as Json["price"]["currency"] },
       billingCycle: row.billingCycle as Json["billingCycle"],
       trialDays: row.trialDays ?? null,
@@ -53,6 +62,9 @@ function jsonToRow(json: Json): typeof plans.$inferInsert {
       id: json.id,
       name: json.name,
       description: json.description,
+      provider: json.provider,
+      source: json.source,
+      createdBy: json.createdBy ?? null,
       amountMinor: json.price.amountMinor,
       currency: json.price.currency,
       billingCycle: json.billingCycle,

@@ -22,6 +22,15 @@ export class DenoKvSubscriptionRepo implements SubscriptionRepository {
          .commit();
    }
 
+   async delete(id: SubscriptionId): Promise<void> {
+      const kv = await getKv();
+      // need userId to clean the index — look it up first
+      const entry = await kv.get<ReturnType<Subscription["toJSON"]>>(["sub", id.value]);
+      const op = kv.atomic().delete(["sub", id.value]);
+      if (entry.value) op.delete(["sub_user", entry.value.userId, id.value]);
+      await op.commit();
+   }
+
    async findByUser(userId: string): Promise<Subscription[]> {
       const kv = await getKv();
       const results: Subscription[] = [];

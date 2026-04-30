@@ -4,10 +4,15 @@ import { Money } from "../subscription/money";
 import { BillingCycle } from "../subscription/billing-cycle";
 import { Duration } from "../datetime/duration";
 
+export type PlanSource = "user" | "catalog";
+
 interface PlanProps {
    id: PlanId;
    name: string;
    description: string;
+   provider: string;
+   source: PlanSource;
+   createdBy: string | null;
    price: Money;
    billingCycle: BillingCycle;
    trialDuration: Duration | null;
@@ -24,6 +29,9 @@ export class Plan extends ValueObject<PlanProps> {
       id: string;
       name: string;
       description: string;
+      provider?: string;
+      source?: PlanSource;
+      createdBy?: string | null;
       price: Money;
       billingCycle: BillingCycle;
       trialDuration?: Duration;
@@ -38,6 +46,9 @@ export class Plan extends ValueObject<PlanProps> {
          id: PlanId.of(params.id),
          name,
          description: params.description.trim(),
+         provider: params.provider?.trim() ?? "",
+         source: params.source ?? "catalog",
+         createdBy: params.createdBy ?? null,
          price: params.price,
          billingCycle: params.billingCycle,
          trialDuration: params.trialDuration ?? null,
@@ -49,6 +60,10 @@ export class Plan extends ValueObject<PlanProps> {
    get id(): PlanId { return this.props.id; }
    get name(): string { return this.props.name; }
    get description(): string { return this.props.description; }
+   get provider(): string { return this.props.provider; }
+   get source(): PlanSource { return this.props.source; }
+   get createdBy(): string | null { return this.props.createdBy; }
+   get isUserPlan(): boolean { return this.props.source === "user"; }
    get price(): Money { return this.props.price; }
    get billingCycle(): BillingCycle { return this.props.billingCycle; }
    get trialDuration(): Duration | null { return this.props.trialDuration; }
@@ -78,6 +93,9 @@ export class Plan extends ValueObject<PlanProps> {
          id: this.props.id.toJSON(),
          name: this.props.name,
          description: this.props.description,
+         provider: this.props.provider,
+         source: this.props.source,
+         createdBy: this.props.createdBy,
          price: this.props.price.toJSON(),
          billingCycle: this.props.billingCycle.toJSON(),
          trialDays: this.props.trialDuration?.days ?? null,
@@ -91,6 +109,9 @@ export class Plan extends ValueObject<PlanProps> {
          id: data.id,
          name: data.name,
          description: data.description,
+         provider: data.provider,
+         source: data.source,
+         createdBy: data.createdBy,
          price: Money.of(data.price.amountMinor, data.price.currency),
          billingCycle: BillingCycle.of(data.billingCycle as any),
          trialDuration: data.trialDays != null ? Duration.fromDays(data.trialDays) : undefined,

@@ -11,6 +11,9 @@ export interface UpsertPlanInput {
    id: string;
    name: string;
    description: string;
+   provider?: string;
+   source?: "user" | "catalog";
+   createdBy?: string | null;
    amountMinor: number;
    currency: CurrencyCode;
    billingPeriod: BillingPeriod;
@@ -31,6 +34,9 @@ export function createUpsertPlanHandler(repo: PlanRepository) {
             id: payload.id,
             name: payload.name,
             description: payload.description,
+            provider: payload.provider,
+            source: payload.source,
+            createdBy: payload.createdBy,
             price: Money.of(payload.amountMinor, payload.currency),
             billingCycle: BillingCycle.of(payload.billingPeriod),
             trialDuration: payload.trialDays
