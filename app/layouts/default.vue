@@ -9,7 +9,7 @@ const nav = [{ label: "Dashboard", to: "/d" }];
 const { user, logout } = useAuth();
 const handleLogout = async () => {
     await logout();
-    await navigateTo("/");
+    await navigateTo("/login");
 };
 </script>
 
